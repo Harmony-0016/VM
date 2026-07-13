@@ -1,0 +1,226 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+#define MAX_MEMORY_SIZE 65536 //64 kilobytes of RAM
+#define NUM_REGISTERS 32 //total registers will be 32
+
+
+/**
+ * Defining the instruction set - A vocublary of the CPU so that the vm executes properly. 
+ */
+typedef enum {
+    OP_HALT = 0x00, //Stop the VM
+    OP_ADD = 0x01, //Adds
+    OP_SUB = 0x02, //Subtracts
+    OP_LOAD = 0x03, //Memory to Register
+    OP_STORE  = 0x04, //Register to Memory
+    OP_LDI = 0x05, //Loading immediates
+    OP_JMP = 0x06, //Jump to the address - unconditional
+    OP_JEQ = 0x07, //Jump if equal 
+} Opcode;
+
+/**
+ * Defining a register and it's types - A form of storing data in the CPU so it's faster than RAM
+ */
+typedef enum {
+    //General purpose to be used by temp data and math operators
+    R0 = 0, R1,R2,R3,R4,R5,R6,R7, //First 8 general purpose registers
+    SP = 29, //StackPointer - shows top of stack
+    LR = 30, //Link Register - Where to return after a function call
+    PC = 31 //Program Counter - The memory address of the next instruction
+} Register;
+
+
+/**
+ * The Machine State - Core Structure
+ */
+typedef struct{
+    uint32_t registers[NUM_REGISTERS]; //The registers, the processor of 32 integers 
+    uint8_t memory[MAX_MEMORY_SIZE]; //Massive array of bytes for the memory
+    bool isRunning; // Is it running 
+} VirtualMachine;
+
+/**
+ * Boot up sequence of setting the memory and registers to 0
+ */
+void init_vm(VirtualMachine* vm){
+    //Set all the registers to 0
+    for (int i = 0; i < NUM_REGISTERS; i++){
+        vm -> registers[i] = 0;
+    }
+
+    //Make all the memory to 0
+    for (int i = 0; i < MAX_MEMORY_SIZE; i++){
+        vm->memory[i] = 0;
+    }
+
+    //Start the machine
+    vm->registers[PC] = 0; //Start execution at address 0
+    vm->registers[SP] = MAX_MEMORY_SIZE-1; //The top of memory is total - 1 
+    vm->isRunning = true; //on 
+}
+
+/**
+ * The main loop of the CPU. It will fetch, decode, and execute commands
+ */
+void run_vm(VirtualMachine* vm){
+    printf("Starting Execution...\n");
+
+    //loop until running is turned to off. 
+    while(vm->isRunning){
+        //FETCHING
+        uint32_t pc = vm->registers[PC];
+        //Combining the bytes from memory into a 32-bit instruction
+        uint32_t instruction = (vm->memory[pc] << 24 | vm->memory[pc+1] << 16 | vm->memory[pc+2] << 8 | vm->memory[pc+3]);
+
+        //increments to the next instruction
+        vm->registers[PC] +=4;
+
+        //DECODE 
+        uint8_t opcode = (instruction >> 24) & 0xFF; //top byte
+        uint8_t rA = (instruction >> 16) & 0xFF; //second byte
+        uint8_t rB = (instruction >> 8) & 0xFF; //Third
+        uint8_t rC = instruction & 0xFF; //bottom
+
+        //EXECUTE
+        switch (opcode){
+            case OP_HALT:
+                printf("OP_HALT encountered, shutting down\n");
+                vm->isRunning = false;
+                break; 
+            case OP_ADD:
+                vm->registers[rA] = vm->registers[rB] + vm->registers[rC];
+                printf("ADD: R%d = R%d + R%d (Result: %d)\n", rA, rB, rC, vm->registers[rA]);
+                break;
+            case OP_SUB:
+                vm->registers[rA] = vm->registers[rB] - vm->registers[rC];
+                printf("SUB: R%d = R%d - R%d (Result: %d)\n", rA, rB, rC, vm->registers[rA]);
+                break; 
+            case OP_LOAD:
+                {
+                    uint32_t address = vm->registers[rB];
+
+                    if (address >= MAX_MEMORY_SIZE-3){
+                        printf("FATAL ERROR: Memory read out of bounds at address %d", address);
+                        vm->isRunning = false;
+                        break;
+                    }
+
+                    vm->registers[rA] = (vm->memory[address] << 24) | (vm->memory[address+1] << 16) | (vm->memory[address+2] << 8)| vm->memory[address+3];
+                    printf("LOAD: R%d loaded with a value of %d from Memory Address %d\n", rA, vm->registers[rA], address);
+                }
+                break;
+            case OP_STORE:
+            {
+                uint32_t address = vm->registers[rA];
+                uint32_t value_to_store = vm->registers[rB];
+
+                if (address >= MAX_MEMORY_SIZE -3){
+                    printf("FATAL ERROR: Memory read out of bounds at address %d", address);
+                    vm->isRunning = false;
+                    break; 
+                }
+
+                //Shift right to compare vs 0xFF to determine the byte information.
+                vm->memory[address] = (value_to_store >> 24) & 0xFF;
+                vm->memory[address + 1] = (value_to_store >> 16) & 0xFF;
+                vm->memory[address + 2] = (value_to_store >> 8) & 0xFF;
+                vm->memory[address + 3] = value_to_store & 0xFF;
+
+                printf("STORE: Value %d from R%d stored into Memory Address %d\n", value_to_store, rB, address);
+            }
+                break;
+            case OP_LDI:
+                {
+                    //isolating the bottom 16 bits (rb and rC)
+                    uint16_t immediate = instruction & 0xFFFF;
+
+                    vm->registers[rA] = immediate;
+                    
+                    printf("LDI: R%d loaded with immediate value %d\n", rA, immediate );
+                    break;
+                }
+            case OP_JMP:
+            //JMP rA 
+            //Jumps rA being the desired address, it is not rB
+                {
+                    uint32_t target_address = vm->registers[rA];
+                    
+                    vm->registers[PC] = target_address;
+                    printf("OP_JMP: Jumped memory address to %d\n", target_address);
+                }
+                break;
+            case OP_JEQ:
+            //JEQ rA, rB, rC
+            //if value rA is the value of rB, then go to rC
+            {
+                uint32_t val1 = vm->registers[rA];
+                uint32_t val2 = vm->registers[rB];
+                uint32_t target_address = vm->registers[rC];
+
+                if (val1 == val2){
+                    vm->registers[PC] = target_address;
+                    printf("OP_JEQ: %d == %d. Condition met, jumping to %d", val1, val2, target_address);
+                } else {
+                    printf("OP_JEQ: %d != %d. Condition not met, continuing to next instruction.", val1, val2);
+                }
+            }
+            
+            default:
+                printf("ERROR: No operator for command\n");
+                vm->isRunning = false;
+                break; 
+        }
+
+    }
+}
+
+/**
+ * Determine if I can load the file requested 
+ */
+bool load_program(VirtualMachine* vm, const char* filename){
+    FILE* file = fopen(filename, "rb");
+
+    if (!file) {
+        printf("Error could not open binary file: %s\n", filename);
+        return false;
+    }
+
+    // Determine the file size
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    rewind(file);
+
+    if (file_size > MAX_MEMORY_SIZE) {
+        printf("Error: Program too large for VM memory!\n");
+        fclose(file);
+        return false;
+    }
+
+    // Read file directly into VM memory
+    size_t bytes_read = fread(vm->memory, sizeof(uint8_t), file_size, file);
+    fclose(file);
+
+    printf("Successfully loaded %zu bytes into memory.\n", bytes_read);
+    return true;
+
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        printf("Usage: %s <program.bin>\n", argv[0]);
+        return 1;
+    }
+
+    VirtualMachine vm;
+    init_vm(&vm);
+
+    if (!load_program(&vm, argv[1])) {
+        return 1;
+    }
+
+    run_vm(&vm);
+
+    return 0;
+}
