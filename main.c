@@ -18,6 +18,12 @@ typedef enum {
     OP_LDI = 0x05, //Loading immediates
     OP_JMP = 0x06, //Jump to the address - unconditional
     OP_JEQ = 0x07, //Jump if equal 
+    OP_PUSH = 0x08, //Push register
+    OP_POP = 0x09, //Pop stack to register
+    OP_CMP = 0x0A, //Compare two registers 
+    OP_JNE = 0x0B, //Jump if not equal
+    OP_JGT = 0x0C, //Jump if greater than
+    OP_JLT = 0x0D, //Jump if lesser than
 } Opcode;
 
 /**
@@ -38,7 +44,11 @@ typedef enum {
 typedef struct{
     uint32_t registers[NUM_REGISTERS]; //The registers, the processor of 32 integers 
     uint8_t memory[MAX_MEMORY_SIZE]; //Massive array of bytes for the memory
-    bool isRunning; // Is it running 
+    bool isRunning; // Is it running
+    
+    //Flags
+    bool flag_Z; //Zero flag
+    bool flag_N; //Negative flag
 } VirtualMachine;
 
 /**
@@ -85,18 +95,22 @@ void run_vm(VirtualMachine* vm){
 
         //EXECUTE
         switch (opcode){
+
             case OP_HALT:
                 printf("OP_HALT encountered, shutting down\n");
                 vm->isRunning = false;
                 break; 
+
             case OP_ADD:
                 vm->registers[rA] = vm->registers[rB] + vm->registers[rC];
                 printf("ADD: R%d = R%d + R%d (Result: %d)\n", rA, rB, rC, vm->registers[rA]);
                 break;
+
             case OP_SUB:
                 vm->registers[rA] = vm->registers[rB] - vm->registers[rC];
                 printf("SUB: R%d = R%d - R%d (Result: %d)\n", rA, rB, rC, vm->registers[rA]);
                 break; 
+
             case OP_LOAD:
                 {
                     uint32_t address = vm->registers[rB];
@@ -111,6 +125,7 @@ void run_vm(VirtualMachine* vm){
                     printf("LOAD: R%d loaded with a value of %d from Memory Address %d\n", rA, vm->registers[rA], address);
                 }
                 break;
+
             case OP_STORE:
             {
                 uint32_t address = vm->registers[rA];
@@ -131,6 +146,8 @@ void run_vm(VirtualMachine* vm){
                 printf("STORE: Value %d from R%d stored into Memory Address %d\n", value_to_store, rB, address);
             }
                 break;
+
+
             case OP_LDI:
                 {
                     //isolating the bottom 16 bits (rb and rC)
@@ -141,6 +158,28 @@ void run_vm(VirtualMachine* vm){
                     printf("LDI: R%d loaded with immediate value %d\n", rA, immediate );
                     break;
                 }
+
+
+            case OP_CMP:
+            //CMP R1 R2 
+            //Always compare first beofre using a conditional jump
+            {
+                //Values
+                uint32_t val1 = vm->registers[rA];
+                uint32_t val2 = vm->registers[rB];
+
+                uint32_t diff = (uint32_t)(val1-val2);
+
+                //Changing flags if necessary
+                vm->flag_Z = (diff == 0);
+                vm->flag_N = (diff < 0);
+
+                printf("CMP: Compared %d and %d (Z:%d, N:%d)\n", val1, val2, vm->flag_Z, vm->flag_N);
+
+            }
+            break;
+
+
             case OP_JMP:
             //JMP rA 
             //Jumps rA being the desired address, it is not rB
@@ -151,22 +190,86 @@ void run_vm(VirtualMachine* vm){
                     printf("OP_JMP: Jumped memory address to %d\n", target_address);
                 }
                 break;
-            case OP_JEQ:
-            //JEQ rA, rB, rC
-            //if value rA is the value of rB, then go to rC
-            {
-                uint32_t val1 = vm->registers[rA];
-                uint32_t val2 = vm->registers[rB];
-                uint32_t target_address = vm->registers[rC];
 
-                if (val1 == val2){
-                    vm->registers[PC] = target_address;
-                    printf("OP_JEQ: %d == %d. Condition met, jumping to %d", val1, val2, target_address);
-                } else {
-                    printf("OP_JEQ: %d != %d. Condition not met, continuing to next instruction.", val1, val2);
-                }
+
+            case OP_JEQ:
+            if (vm->flag_Z) {
+                vm->registers[PC] = vm->registers[rA];
+                printf("JEQ: Condition met, jumping to %d\n", vm->registers[rA]);
+            } 
+            break;
+
+            case OP_JNE:
+            //Jump if not equal
+            if (!vm->flag_Z){
+                vm->registers[PC] = vm->registers[rA];
+                printf("JNE: Condition met, jumping to %d\n", vm->registers[rA]);
             }
+
+            case OP_JLT:
+            //Jump if less than
+            if (vm->flag_N){
+                vm->registers[PC] = vm->registers[rA];
+                printf("JLT: Condition met, jumping to %d\n", vm->registers[rA]);
+            }
+
+            case OP_JGT:
+            //Jump if greater than
+            if(!vm->flag_N && !vm->flag_Z){
+                vm->registers[PC] = vm->registers[rA];
+                printf("Condition met, jumpting to %d\n", vm->registers[rA]);
+            }
+            break; 
             
+
+            case OP_PUSH:
+            //PUSH rA
+            {
+                uint32_t val = vm->registers[rA];
+                
+                vm->registers[SP] -= 4;
+                uint32_t sp = vm->registers[SP];
+                
+                //Error Check
+                if (sp >= MAX_MEMORY_SIZE - 3) {
+                    printf("FATAL ERROR: Stack Overflow at address %d\n", sp);
+                    vm->isRunning = false;
+                    break;
+                }
+
+                vm->memory[sp]     = (val >> 24) & 0xFF;
+                vm->memory[sp + 1] = (val >> 16) & 0xFF;
+                vm->memory[sp + 2] = (val >> 8)  & 0xFF;
+                vm->memory[sp + 3] = (val)       & 0xFF;
+
+                printf("PUSH: Saved value %d from R%d onto the stack at address %d\n", val, rA, sp);
+            }
+            break;
+
+
+            case OP_POP: 
+            //POP rA
+            {
+                uint32_t sp = vm->registers[SP];
+
+                //Error check
+                if (sp >= MAX_MEMORY_SIZE - 3) {
+                    printf("FATAL ERROR: Stack Underflow (Popped an empty stack!)\n");
+                    vm->isRunning = false;
+                    break;
+                }
+
+                vm->registers[rA] = (vm->memory[sp]     << 24) |
+                                    (vm->memory[sp + 1] << 16) |
+                                    (vm->memory[sp + 2] << 8)  |
+                                    (vm->memory[sp + 3]);
+                vm->registers[SP] += 4;
+
+                printf("POP: Restored value %d from stack into R%d\n", vm->registers[rA], rA);
+            }
+            break;
+
+
             default:
                 printf("ERROR: No operator for command\n");
                 vm->isRunning = false;

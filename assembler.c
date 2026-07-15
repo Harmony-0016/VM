@@ -15,6 +15,12 @@ typedef enum {
     OP_LDI = 0x05, //Loading immediates
     OP_JMP = 0x06, //Jump to the address - unconditional
     OP_JEQ = 0x07, //Jump if equal 
+    OP_PUSH = 0x08,
+    OP_POP = 0x09,
+    OP_CMP = 0x0A,
+    OP_JNE = 0x0B,
+    OP_JLT = 0x0C,
+    OP_JGT = 0x0D,
 } Opcode;
 
 /**
@@ -100,11 +106,26 @@ int main(int argc, char* argv[]){
             uint8_t rA = parse_register(strtok(NULL, " ,"));
             instruction = ((OP_JMP << 24) | (rA << 16));
         }
-        else if (strcmp(token, "JEQ") == 0){
+        else if (strcmp(token, "PUSH") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_PUSH << 24) | (rA << 16);
+        }
+        else if (strcmp(token, "POP") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_POP << 24) | (rA << 16);
+        }
+        else if (strcmp(token, "CMP") == 0){
             uint8_t rA = parse_register(strtok(NULL, " ,"));
             uint8_t rB = parse_register(strtok(NULL, " ,"));
-            uint8_t rC = parse_register(strtok(NULL, " ,"));
-            instruction = ((OP_JEQ << 24) | (rA << 16) | (rB << 8) | rC);
+            instruction = (OP_CMP << 24 | rA << 16 | rB << 8);
+        }
+        else if (strcmp(token, "JEQ") == 0 || strcmp(token, "JNE") == 0 || strcmp(token, "JLT") == 0 || strcmp(token, "JGT") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));        
+            
+            if (strcmp(token, "JEQ") == 0) instruction = (OP_JEQ << 24) | (rA << 16);
+            if (strcmp(token, "JNE") == 0) instruction = (OP_JNE << 24) | (rA << 16);
+            if (strcmp(token, "JLT") == 0) instruction = (OP_JLT << 24) | (rA << 16);
+            if (strcmp(token, "JGT") == 0) instruction = (OP_JGT << 24) | (rA << 16);
         }
         else {
             printf("Error on line %d: Unknown instruction '%s'\n", line_number, token);
