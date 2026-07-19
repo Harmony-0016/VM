@@ -103,12 +103,10 @@ void run_vm(VirtualMachine* vm){
 
             case OP_ADD:
                 vm->registers[rA] = vm->registers[rB] + vm->registers[rC];
-                printf("ADD: R%d = R%d + R%d (Result: %d)\n", rA, rB, rC, vm->registers[rA]);
                 break;
 
             case OP_SUB:
                 vm->registers[rA] = vm->registers[rB] - vm->registers[rC];
-                printf("SUB: R%d = R%d - R%d (Result: %d)\n", rA, rB, rC, vm->registers[rA]);
                 break; 
 
             case OP_LOAD:
@@ -122,7 +120,7 @@ void run_vm(VirtualMachine* vm){
                     }
 
                     vm->registers[rA] = (vm->memory[address] << 24) | (vm->memory[address+1] << 16) | (vm->memory[address+2] << 8)| vm->memory[address+3];
-                    printf("LOAD: R%d loaded with a value of %d from Memory Address %d\n", rA, vm->registers[rA], address);
+                   
                 }
                 break;
 
@@ -130,6 +128,12 @@ void run_vm(VirtualMachine* vm){
             {
                 uint32_t address = vm->registers[rA];
                 uint32_t value_to_store = vm->registers[rB];
+
+                if (address == MAX_MEMORY_SIZE - 1){
+                     //Output memory onto the screen, can be used for the ui of the vm
+                    printf("%c", (char)value_to_store);
+                    break;
+                }
 
                 if (address >= MAX_MEMORY_SIZE -3){
                     printf("FATAL ERROR: Memory read out of bounds at address %d", address);
@@ -142,8 +146,6 @@ void run_vm(VirtualMachine* vm){
                 vm->memory[address + 1] = (value_to_store >> 16) & 0xFF;
                 vm->memory[address + 2] = (value_to_store >> 8) & 0xFF;
                 vm->memory[address + 3] = value_to_store & 0xFF;
-
-                printf("STORE: Value %d from R%d stored into Memory Address %d\n", value_to_store, rB, address);
             }
                 break;
 
@@ -154,8 +156,6 @@ void run_vm(VirtualMachine* vm){
                     uint16_t immediate = instruction & 0xFFFF;
 
                     vm->registers[rA] = immediate;
-                    
-                    printf("LDI: R%d loaded with immediate value %d\n", rA, immediate );
                     break;
                 }
 
@@ -174,8 +174,6 @@ void run_vm(VirtualMachine* vm){
                 vm->flag_Z = (diff == 0);
                 vm->flag_N = (diff < 0);
 
-                printf("CMP: Compared %d and %d (Z:%d, N:%d)\n", val1, val2, vm->flag_Z, vm->flag_N);
-
             }
             break;
 
@@ -187,7 +185,6 @@ void run_vm(VirtualMachine* vm){
                     uint32_t target_address = vm->registers[rA];
                     
                     vm->registers[PC] = target_address;
-                    printf("OP_JMP: Jumped memory address to %d\n", target_address);
                 }
                 break;
 
@@ -195,7 +192,6 @@ void run_vm(VirtualMachine* vm){
             case OP_JEQ:
             if (vm->flag_Z) {
                 vm->registers[PC] = vm->registers[rA];
-                printf("JEQ: Condition met, jumping to %d\n", vm->registers[rA]);
             } 
             break;
 
@@ -203,21 +199,18 @@ void run_vm(VirtualMachine* vm){
             //Jump if not equal
             if (!vm->flag_Z){
                 vm->registers[PC] = vm->registers[rA];
-                printf("JNE: Condition met, jumping to %d\n", vm->registers[rA]);
             }
 
             case OP_JLT:
             //Jump if less than
             if (vm->flag_N){
                 vm->registers[PC] = vm->registers[rA];
-                printf("JLT: Condition met, jumping to %d\n", vm->registers[rA]);
             }
 
             case OP_JGT:
             //Jump if greater than
             if(!vm->flag_N && !vm->flag_Z){
                 vm->registers[PC] = vm->registers[rA];
-                printf("Condition met, jumpting to %d\n", vm->registers[rA]);
             }
             break; 
             
@@ -242,7 +235,6 @@ void run_vm(VirtualMachine* vm){
                 vm->memory[sp + 2] = (val >> 8)  & 0xFF;
                 vm->memory[sp + 3] = (val)       & 0xFF;
 
-                printf("PUSH: Saved value %d from R%d onto the stack at address %d\n", val, rA, sp);
             }
             break;
 
@@ -264,8 +256,6 @@ void run_vm(VirtualMachine* vm){
                                     (vm->memory[sp + 2] << 8)  |
                                     (vm->memory[sp + 3]);
                 vm->registers[SP] += 4;
-
-                printf("POP: Restored value %d from stack into R%d\n", vm->registers[rA], rA);
             }
             break;
 
