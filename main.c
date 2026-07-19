@@ -113,6 +113,11 @@ void run_vm(VirtualMachine* vm){
                 {
                     uint32_t address = vm->registers[rB];
 
+                    if (address == MAX_MEMORY_SIZE - 2){
+                        vm->registers[rA] = (uint32_t)getchar();
+                        break;
+                    }
+
                     if (address >= MAX_MEMORY_SIZE-3){
                         printf("FATAL ERROR: Memory read out of bounds at address %d", address);
                         vm->isRunning = false;
