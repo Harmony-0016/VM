@@ -59,18 +59,23 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
-    //
     char line[256]; 
+    char orig_line[256];
 
     //PASS 1 -- Finding labels and record addresses 
     uint32_t current_address = 0;
 
     while (fgets(line, sizeof(line), infile)){
-        line[strcspn(line, "\r\n")] = 0;
+        line[strcspn(line, "\r\n")] = 0;    
+        strcpy(orig_line, line);
+
         if (strlen(line) == 0) continue;
 
         char* token = strtok(line, " ,");
+
         if (!token) continue;
+
+        if (token[0] == ';')continue;
 
         int len = strlen(token);
         if (token[len-1] == ':'){
@@ -78,6 +83,18 @@ int main(int argc, char* argv[]){
             strcpy(symbol_table[symbol_count].name, token);
             symbol_table[symbol_count].address = current_address;
             symbol_count++;
+            continue;
+        }
+
+        //If it's a String
+        if (strcmp(token, ".STRING") == 0){
+            char* start = strchr(orig_line, '"');
+            char* end = strrchr(orig_line, '"');
+            //Ensure everything exists and they aren't equal
+            if (end && start && start != end){
+                int string_len = end - start;
+                current_address += (string_len * 4);
+            }
             continue;
         }
 
@@ -91,50 +108,69 @@ int main(int argc, char* argv[]){
 
     //while there are still lines
     while (fgets(line, sizeof(line), infile)) {
-    line_number++;
-    line[strcspn(line, "\r\n")] = 0;
-    if (strlen(line) == 0) continue;
+        line_number++;
+        line[strcspn(line, "\r\n")] = 0;
 
-    char* token = strtok(line, " ,");
-    if (!token) continue;
+        strcpy(orig_line, line);
+        
+        if (strlen(line) == 0) continue;
 
-    // Skip labels on pass 2, we already processed them
-    if (token[strlen(token) - 1] == ':') continue;
 
-    uint32_t instruction = 0;
+        char* token = strtok(line, " ,");
+        if (!token) continue;
+        if (token[0] == ';') continue;
 
-    if (strcmp(token, "HALT") == 0) {
-        instruction = (OP_HALT << 24);
-    } 
-    else if (strcmp(token, "ADD") == 0) {
-        uint8_t rA = parse_register(strtok(NULL, " ,"));
-        uint8_t rB = parse_register(strtok(NULL, " ,"));
-        uint8_t rC = parse_register(strtok(NULL, " ,"));
-        instruction = (OP_ADD << 24) | (rA << 16) | (rB << 8) | rC;
-    }
-    else if (strcmp(token, "SUB") == 0) {
-        uint8_t rA = parse_register(strtok(NULL, " ,"));
-        uint8_t rB = parse_register(strtok(NULL, " ,"));
-        uint8_t rC = parse_register(strtok(NULL, " ,"));
-        instruction = (OP_SUB << 24) | (rA << 16) | (rB << 8) | rC;
-    }
-    else if (strcmp(token, "LOAD") == 0) {
-        uint8_t rA = parse_register(strtok(NULL, " ,"));
-        uint8_t rB = parse_register(strtok(NULL, " ,"));
-        instruction = (OP_LOAD << 24) | (rA << 16) | (rB << 8);
-    }
-    else if (strcmp(token, "STORE") == 0) {
-        uint8_t rA = parse_register(strtok(NULL, " ,"));
-        uint8_t rB = parse_register(strtok(NULL, " ,"));
-        instruction = (OP_STORE << 24) | (rA << 16) | (rB << 8);
-    }
-    else if (strcmp(token, "LDI") == 0) {
-        uint8_t rA = parse_register(strtok(NULL, " ,"));
-        char* val_str = strtok(NULL, " ,");
-        uint16_t imm = 0;
-        int found = 0;
+        // Skip labels on pass 2, we already processed them
+        if (token[strlen(token) - 1] == ':') continue;
 
-        // NEW: Check if val_str is a label in our cheat sheet
+        if (strcmp(token, ".STRING") == 0){
+            char* start = strchr(orig_line, '"');
+            char* end = strrchr(orig_line, '"');
+            if (start && end && start != end){
+                for (int i = 1; i < (end-start); i++){
+                    uint32_t char_val = (uint32_t)start[i];
+                    uint8_t bytes[4] = { (char_val >> 24) & 0xFF, (char_val >> 16) & 0xFF, (char_val >> 8) & 0xFF, char_val & 0xFF };
+                    fwrite(bytes, sizeof(uint8_t), 4, outfile);
+                }
+                uint8_t zeros[4] = {0,0,0,0};
+                fwrite(zeros, sizeof(uint8_t), 4, outfile);
+            }
+            continue;
+        }
+
+        uint32_t instruction = 0;
+
+        if (strcmp(token, "HALT") == 0) {
+            instruction = (OP_HALT << 24);
+        } 
+        else if (strcmp(token, "ADD") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_ADD << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "SUB") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_SUB << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "LOAD") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_LOAD << 24) | (rA << 16) | (rB << 8);
+        }
+        else if (strcmp(token, "STORE") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_STORE << 24) | (rA << 16) | (rB << 8);
+        }
+        else if (strcmp(token, "LDI") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            char* val_str = strtok(NULL, " ,");
+            uint16_t imm = 0;
+            int found = 0;
+
         for (int i = 0; i < symbol_count; i++) {
             if (strcmp(val_str, symbol_table[i].name) == 0) {
                 imm = symbol_table[i].address;
