@@ -23,6 +23,12 @@ typedef enum {
     OP_JGT = 0x0D,
     OP_CALL = 0x0E,
     OP_RET = 0x0F,
+    OP_AND = 0x10,
+    OP_OR = 0x11,
+    OP_XOR = 0x12,
+    OP_NOT = 0x13,
+    OP_SHL = 0x14,
+    OP_SHR = 0x15,
 } Opcode;
 
 typedef struct {
@@ -220,6 +226,41 @@ int main(int argc, char* argv[]){
     else if (strcmp(token, "RET") == 0) {
         instruction = OP_RET << 24; 
     }
+    else if (strcmp(token, "AND") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_AND << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "OR") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_OR << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "XOR") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_XOR << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "NOT") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_NOT << 24) | (rA << 16) | (rB << 8);
+        }
+        else if (strcmp(token, "SHL") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_SHL << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "SHR") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_SHR << 24) | (rA << 16) | (rB << 8) | rC;
+        }
     else {
         printf("Error on line %d: Unknown instruction '%s'\n", line_number, token);
         continue;

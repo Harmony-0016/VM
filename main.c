@@ -26,6 +26,12 @@ typedef enum {
     OP_JLT = 0x0D, //Jump if lesser than
     OP_CALL = 0x0E, //Saves the current position of the PC
     OP_RET = 0x0F, //Marks the end of a function - go back to the saved position
+    OP_AND = 0x10,
+    OP_OR = 0x11,
+    OP_XOR = 0x12,
+    OP_NOT = 0x13,
+    OP_SHL = 0x14,
+    OP_SHR = 0x15,
 } Opcode;
 
 /**
@@ -280,6 +286,49 @@ void run_vm(VirtualMachine* vm){
             {
                 //Go back to the previous position
                 vm->registers[PC] = vm->registers[LR];
+            }
+            break;
+
+            case OP_AND:
+            //AND rA rB rC - Works when the bits align
+            {
+                vm->registers[rA] = vm->registers[rB] & vm->registers[rC];
+            }
+            break;
+
+            case OP_OR:
+            //OR rA rB rC - Works when a singular bit has a 1
+            {
+                vm->registers[rA] = vm->registers[rB] | vm->registers[rC];
+            }
+            break;
+            
+            case OP_XOR:
+            //XOR rA rB rC - One or the other has a 1 in that bit column
+            {
+                vm->registers[rA] = vm->registers[rB] ^ vm->registers[rC];
+            }
+            break;
+
+            case OP_NOT:
+            //NOT rA rB
+            {
+                vm->registers[rA] = ~vm->registers[rB];
+            }
+            break;
+
+            case OP_SHL:
+            //SHL rA rB rC
+            {
+                vm->registers[rA] = vm->registers[rB] << vm->registers[rC];
+            }
+            break;
+
+
+            case OP_SHR:
+            //SHR rA rB rC
+            {
+                vm->registers[rA] = vm->registers[rB] >> vm->registers[rC];
             }
             break;
 
