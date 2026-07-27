@@ -24,6 +24,8 @@ typedef enum {
     OP_JNE = 0x0B, //Jump if not equal
     OP_JGT = 0x0C, //Jump if greater than
     OP_JLT = 0x0D, //Jump if lesser than
+    OP_CALL = 0x0E, //Saves the current position of the PC
+    OP_RET = 0x0F, //Marks the end of a function - go back to the saved position
 } Opcode;
 
 /**
@@ -264,6 +266,22 @@ void run_vm(VirtualMachine* vm){
             }
             break;
 
+            case OP_CALL:
+            //CALL rA
+            {
+                //Save current position, jump to rA
+                vm->registers[LR] = vm->registers[PC];
+                vm->registers[PC] = vm->registers[rA];
+            }
+            break; 
+
+            case OP_RET:
+            //RET
+            {
+                //Go back to the previous position
+                vm->registers[PC] = vm->registers[LR];
+            }
+            break;
 
             default:
                 printf("ERROR: No operator for command\n");

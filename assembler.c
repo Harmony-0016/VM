@@ -21,6 +21,8 @@ typedef enum {
     OP_JNE = 0x0B,
     OP_JLT = 0x0C,
     OP_JGT = 0x0D,
+    OP_CALL = 0x0E,
+    OP_RET = 0x0F,
 } Opcode;
 
 typedef struct {
@@ -210,6 +212,13 @@ int main(int argc, char* argv[]){
     else if (strcmp(token, "POP") == 0) {
         uint8_t rA = parse_register(strtok(NULL, " ,"));
         instruction = (OP_POP << 24) | (rA << 16);
+    }
+    else if (strcmp(token, "CALL") == 0){
+        uint8_t rA = parse_register(strtok(NULL, " ,"));
+        instruction = (OP_CALL << 24 | (rA << 16));
+    }
+    else if (strcmp(token, "RET") == 0) {
+        instruction = OP_RET << 24; 
     }
     else {
         printf("Error on line %d: Unknown instruction '%s'\n", line_number, token);
