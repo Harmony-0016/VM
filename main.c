@@ -32,6 +32,9 @@ typedef enum {
     OP_NOT = 0x13,
     OP_SHL = 0x14,
     OP_SHR = 0x15,
+    OP_MUL = 0x16,
+    OP_DIV = 0x17,
+    OP_MOD = 0x18,
 } Opcode;
 
 /**
@@ -331,6 +334,32 @@ void run_vm(VirtualMachine* vm){
                 vm->registers[rA] = vm->registers[rB] >> vm->registers[rC];
             }
             break;
+
+            case OP_MUL:
+            {
+                vm->registers[rA] = vm->registers[rB] * vm->registers[rC];
+            }
+            break; 
+
+            case OP_DIV:
+            {
+                if (vm->registers[rC] == 0){
+                    printf("ERROR: Divisor is not supposed to be 0");
+                    vm->isRunning = false;
+                    break;
+                }
+                vm->registers[rA] = vm->registers[rB] / vm->registers[rC];
+            }
+            break;
+
+            case OP_MOD:
+                if (vm->registers[rC] == 0) {
+                    printf("FATAL ERROR: Modulo by zero attempted!\n");
+                    vm->isRunning = false;
+                    break;
+                }
+                vm->registers[rA] = vm->registers[rB] % vm->registers[rC];
+                break;
 
             default:
                 printf("ERROR: No operator for command\n");

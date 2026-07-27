@@ -29,6 +29,9 @@ typedef enum {
     OP_NOT = 0x13,
     OP_SHL = 0x14,
     OP_SHR = 0x15,
+    OP_MUL = 0x16,
+    OP_DIV = 0x17,
+    OP_MOD = 0x18,
 } Opcode;
 
 typedef struct {
@@ -260,6 +263,24 @@ int main(int argc, char* argv[]){
             uint8_t rB = parse_register(strtok(NULL, " ,"));
             uint8_t rC = parse_register(strtok(NULL, " ,"));
             instruction = (OP_SHR << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "MUL") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_MUL << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "DIV") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_DIV << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "MOD") == 0) {
+            uint8_t rA = parse_register(strtok(NULL, " ,"));
+            uint8_t rB = parse_register(strtok(NULL, " ,"));
+            uint8_t rC = parse_register(strtok(NULL, " ,"));
+            instruction = (OP_MOD << 24) | (rA << 16) | (rB << 8) | rC;
         }
     else {
         printf("Error on line %d: Unknown instruction '%s'\n", line_number, token);
