@@ -1,0 +1,12 @@
+int x = 2
+int y = 5
+int z = x + y
+
+if x == 5 or (x == 3 and y > 3) {
+    print(z)
+}
+
+while x < 10 {
+    print(x)
+    x = x + 1
+}       
