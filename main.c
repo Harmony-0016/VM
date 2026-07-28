@@ -35,6 +35,7 @@ typedef enum {
     OP_MUL = 0x16,
     OP_DIV = 0x17,
     OP_MOD = 0x18,
+    OP_DUMP = 0x19,
 } Opcode;
 
 /**
@@ -80,6 +81,28 @@ void init_vm(VirtualMachine* vm){
     vm->registers[PC] = 0; //Start execution at address 0
     vm->registers[SP] = MAX_MEMORY_SIZE-1; //The top of memory is total - 1 
     vm->isRunning = true; //on 
+}
+
+
+void dump_state(VirtualMachine* vm){
+    printf("================CPU DUMP STATE===================\n");
+
+    //General purpose registers
+    for (int i = 0; i < 29; i++){
+        printf("R%-2d: %-10u ", i, vm->registers[i]);
+        if((i+1) % 4 == 0) printf("\n");
+    }
+
+    printf("\n\n--- Special Registers ---\n");
+    printf("SP  (R29): %u\n", vm->registers[SP]);
+    printf("LR  (R30): %u\n", vm->registers[LR]);
+    printf("PC  (R31): %u\n", vm->registers[PC]);
+
+    printf("--- Flags ---\n");
+    printf("Zero (Z): %d    Negative (N): %d\n", vm->flag_Z, vm->flag_N);
+    printf("========================================================\n\n");
+
+
 }
 
 /**
@@ -359,6 +382,10 @@ void run_vm(VirtualMachine* vm){
                     break;
                 }
                 vm->registers[rA] = vm->registers[rB] % vm->registers[rC];
+                break;
+
+            case OP_DUMP: 
+                dump_state(vm);
                 break;
 
             default:

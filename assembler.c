@@ -32,6 +32,7 @@ typedef enum {
     OP_MUL = 0x16,
     OP_DIV = 0x17,
     OP_MOD = 0x18,
+    OP_DUMP = 0x19,
 } Opcode;
 
 typedef struct {
@@ -281,6 +282,9 @@ int main(int argc, char* argv[]){
             uint8_t rB = parse_register(strtok(NULL, " ,"));
             uint8_t rC = parse_register(strtok(NULL, " ,"));
             instruction = (OP_MOD << 24) | (rA << 16) | (rB << 8) | rC;
+        }
+        else if (strcmp(token, "DUMP") == 0){
+            instruction = OP_DUMP << 24; 
         }
     else {
         printf("Error on line %d: Unknown instruction '%s'\n", line_number, token);
