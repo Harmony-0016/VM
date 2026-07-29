@@ -28,11 +28,10 @@ typedef enum {
     AST_PRINT,
     AST_IF,
     AST_WHILE,
-    // --- NEW NODE TYPES FOR MATH ---
-    AST_NUMBER,    // Just a raw number
-    AST_VAR_REF,   // Looking up an existing variable (like 'x')
-    AST_ADD,       // Addition
-    AST_SUB        // Subtraction
+    AST_NUMBER,    //Just a raw number
+    AST_VAR_REF,   //Looking up an existing variable (like 'x')
+    AST_ADD,       //Addition
+    AST_SUB        //Subtraction
 } ASTNodeType;
 
 /**
@@ -163,15 +162,15 @@ void eat(TokenType expected_type, const char* error_msg){
     }
 }
 
-ASTNode* parse_expression();
-
 ASTNode* parse_primary() {
+    //If it's a number, make the node with the type and value. 
     if (current_token.type == TOKEN_NUMBER) {
         ASTNode* node = create_node(AST_NUMBER);
         node->int_value = atoi(current_token.lexeme);
         eat(TOKEN_NUMBER, "Expected number");
         return node;
     } 
+    //Note that it's an identifier, make the node with the variable's value. 
     else if (current_token.type == TOKEN_IDENTIFIER) {
         ASTNode* node = create_node(AST_VAR_REF);
         strcpy(node->val_name, current_token.lexeme);
@@ -184,17 +183,23 @@ ASTNode* parse_primary() {
 }
 
 ASTNode* parse_expression() {
+    //Grab the node. Move onto the next token
     ASTNode* left = parse_primary();
 
+    //Check which symbol it is 
     if (current_token.type == TOKEN_SYMBOL && (strcmp(current_token.lexeme, "+") == 0 || strcmp(current_token.lexeme, "-") == 0)) {
-  
+        
+        //Type of operator saved and move onto the next
         ASTNodeType op_type = (strcmp(current_token.lexeme, "+") == 0) ? AST_ADD : AST_SUB;
         eat(TOKEN_SYMBOL, "Expected math operator");
 
+        //Making the math node with the operator type
         ASTNode* math_node = create_node(op_type);
 
+        //Read the right side
         ASTNode* right = parse_primary();
         
+        //add both children
         add_child(math_node, left);
         add_child(math_node, right);
         
