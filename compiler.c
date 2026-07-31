@@ -28,10 +28,17 @@ typedef enum {
     AST_PRINT,
     AST_IF,
     AST_WHILE,
-    AST_NUMBER,    //Just a raw number
-    AST_VAR_REF,   //Looking up an existing variable (like 'x')
-    AST_ADD,       //Addition
-    AST_SUB        //Subtraction
+    // --- NEW NODE TYPES FOR MATH & LOGIC ---
+    AST_NUMBER,    
+    AST_VAR_REF,   
+    AST_ADD,       
+    AST_SUB,
+    AST_LT,        // Less Than (<)
+    AST_GT,        // Greater Than (>)
+    AST_EQ,        // Equal To (==)
+    AST_AND,       // Logical AND
+    AST_OR,        // Logical OR
+    AST_BLOCK      // A block of code inside { }
 } ASTNodeType;
 
 /**
@@ -61,6 +68,7 @@ ASTNode* create_node(ASTNodeType type){
  * Adding a node to the tree (linked list via pointers)
  */
 void add_child(ASTNode* parent, ASTNode* child){
+    if (!child) return; // Prevent adding NULL children
     parent->child_count++;
     parent->children = realloc(parent->children, sizeof(ASTNode*)*parent->child_count);
     parent->children[parent->child_count-1] = child; 
@@ -137,8 +145,21 @@ Token get_next_token(){
         return token;
     }
 
-    //if it's a known symbol - there is no math other than addition currently
-    if (peek() == '=' || peek() == ';' || peek() == '{' || peek() == '}' || peek() == '(' || peek() == ')' || peek() == '+' || peek() == '-' || peek() == '<' || peek() == '>') {
+    // --- UPDATED SYMBOL LOGIC FOR == ---
+    if (peek() == '=') {
+        token.lexeme[0] = advance();
+        if (peek() == '=') {
+            token.lexeme[1] = advance();
+            token.lexeme[2] = '\0';
+        } else {
+            token.lexeme[1] = '\0';
+        }
+        token.type = TOKEN_SYMBOL;
+        return token;
+    }
+
+    //if it's a known symbol
+    if (peek() == ';' || peek() == '{' || peek() == '}' || peek() == '(' || peek() == ')' || peek() == '+' || peek() == '-' || peek() == '<' || peek() == '>') {
         token.lexeme[0] = advance();
         token.lexeme[1] = '\0';
         token.type = TOKEN_SYMBOL;
@@ -153,7 +174,6 @@ Token get_next_token(){
 }
 
 void eat(TokenType expected_type, const char* error_msg){
-    
     if (current_token.type == expected_type){
         current_token = get_next_token();
     } else {
@@ -162,50 +182,175 @@ void eat(TokenType expected_type, const char* error_msg){
     }
 }
 
+// Forward declarations
+ASTNode* parse_expression();
+ASTNode* parse_statement();
+
+// --- EXPRESSION PARSERS (Math & Logic) ---
+
 ASTNode* parse_primary() {
-    //If it's a number, make the node with the type and value. 
     if (current_token.type == TOKEN_NUMBER) {
         ASTNode* node = create_node(AST_NUMBER);
         node->int_value = atoi(current_token.lexeme);
         eat(TOKEN_NUMBER, "Expected number");
         return node;
     } 
-    //Note that it's an identifier, make the node with the variable's value. 
     else if (current_token.type == TOKEN_IDENTIFIER) {
         ASTNode* node = create_node(AST_VAR_REF);
         strcpy(node->val_name, current_token.lexeme);
         eat(TOKEN_IDENTIFIER, "Expected identifier");
         return node;
     }
+    else if (current_token.type == TOKEN_SYMBOL && strcmp(current_token.lexeme, "(") == 0) {
+        eat(TOKEN_SYMBOL, "Expected '('");
+        ASTNode* expr = parse_expression();
+        if (strcmp(current_token.lexeme, ")") != 0) {
+            printf("Syntax Error: Expected closing ')'\n");
+            exit(1);
+        }
+        eat(TOKEN_SYMBOL, "Expected ')'");
+        return expr;
+    }
     
-    printf("Syntax Error: Expected a number or variable, but found '%s'\n", current_token.lexeme);
+    printf("Syntax Error: Expected a number, variable, or '(', but found '%s'\n", current_token.lexeme);
     exit(1);
 }
 
-ASTNode* parse_expression() {
-    //Grab the node. Move onto the next token
-    ASTNode* left = parse_primary();
+// Handles * and / (If you add them later, they go here to handle Order of Operations)
+ASTNode* parse_term() {
+    return parse_primary();
+}
 
-    //Check which symbol it is 
-    if (current_token.type == TOKEN_SYMBOL && (strcmp(current_token.lexeme, "+") == 0 || strcmp(current_token.lexeme, "-") == 0)) {
-        
-        //Type of operator saved and move onto the next
+// Handles + and -
+ASTNode* parse_math() {
+    ASTNode* left = parse_term();
+    
+    while (current_token.type == TOKEN_SYMBOL && (strcmp(current_token.lexeme, "+") == 0 || strcmp(current_token.lexeme, "-") == 0)) {
         ASTNodeType op_type = (strcmp(current_token.lexeme, "+") == 0) ? AST_ADD : AST_SUB;
         eat(TOKEN_SYMBOL, "Expected math operator");
-
-        //Making the math node with the operator type
-        ASTNode* math_node = create_node(op_type);
-
-        //Read the right side
-        ASTNode* right = parse_primary();
         
-        //add both children
+        ASTNode* math_node = create_node(op_type);
+        ASTNode* right = parse_term();
+        
         add_child(math_node, left);
         add_child(math_node, right);
-        
-        return math_node;
+        left = math_node; 
     }
     return left;
+}
+
+// Handles <, >, ==
+ASTNode* parse_comparison() {
+    ASTNode* left = parse_math();
+    
+    if (current_token.type == TOKEN_SYMBOL && (strcmp(current_token.lexeme, "<") == 0 || strcmp(current_token.lexeme, ">") == 0 || strcmp(current_token.lexeme, "==") == 0)) {
+        ASTNodeType op_type;
+        if (strcmp(current_token.lexeme, "<") == 0) op_type = AST_LT;
+        else if (strcmp(current_token.lexeme, ">") == 0) op_type = AST_GT;
+        else op_type = AST_EQ;
+        
+        eat(TOKEN_SYMBOL, "Expected comparison operator");
+        
+        ASTNode* comp_node = create_node(op_type);
+        ASTNode* right = parse_math();
+        
+        add_child(comp_node, left);
+        add_child(comp_node, right);
+        return comp_node;
+    }
+    return left;
+}
+
+// Handles AND, OR (This is the top level of our expression logic)
+ASTNode* parse_expression() {
+    ASTNode* left = parse_comparison();
+    
+    while (current_token.type == TOKEN_KEYWORD && (strcmp(current_token.lexeme, "and") == 0 || strcmp(current_token.lexeme, "or") == 0)) {
+        ASTNodeType op_type = (strcmp(current_token.lexeme, "and") == 0) ? AST_AND : AST_OR;
+        eat(TOKEN_KEYWORD, "Expected logical operator");
+        
+        ASTNode* logic_node = create_node(op_type);
+        ASTNode* right = parse_comparison();
+        
+        add_child(logic_node, left);
+        add_child(logic_node, right);
+        left = logic_node;
+    }
+    
+    return left;
+}
+
+
+// --- STATEMENT PARSERS ---
+
+// Helper function to eat optional newlines
+void skip_newlines() {
+    while (current_token.type == TOKEN_NEWLINE) {
+        eat(TOKEN_NEWLINE, "Skipping blank lines");
+    }
+}
+
+// Parses { statement1 \n statement2 \n }
+ASTNode* parse_block() {
+    ASTNode* block = create_node(AST_BLOCK);
+    
+    skip_newlines(); // Ignore any Enter keys between the condition and the brace
+    
+    if (strcmp(current_token.lexeme, "{") != 0) {
+        printf("Syntax Error: Expected '{' to start block. Found '%s' instead.\n", current_token.lexeme);
+        exit(1);
+    }
+    eat(TOKEN_SYMBOL, "Expected '{'");
+    
+    skip_newlines();
+    
+    while (strcmp(current_token.lexeme, "}") != 0 && current_token.type != TOKEN_EOF) {
+        ASTNode* stmt = parse_statement();
+        if (stmt) {
+            add_child(block, stmt);
+        }
+        
+        // We expect a newline after every statement inside a block
+        if (current_token.type == TOKEN_NEWLINE) {
+            skip_newlines();
+        } else if (strcmp(current_token.lexeme, "}") != 0) {
+             printf("Syntax Error: Expected newline after statement in block, found '%s'\n", current_token.lexeme);
+             exit(1);
+        }
+    }
+    
+    eat(TOKEN_SYMBOL, "Expected '}'");
+    return block;
+}
+
+ASTNode* parse_if() {
+    ASTNode* node = create_node(AST_IF);
+    eat(TOKEN_KEYWORD, "Expected 'if'");
+    
+    // Parse the condition (e.g., x < 10)
+    ASTNode* condition = parse_expression();
+    add_child(node, condition);
+    
+    // Parse the body { ... }
+    ASTNode* body = parse_block();
+    add_child(node, body);
+    
+    return node;
+}
+
+ASTNode* parse_while() {
+    ASTNode* node = create_node(AST_WHILE);
+    eat(TOKEN_KEYWORD, "Expected 'while'");
+    
+    // Parse the condition
+    ASTNode* condition = parse_expression();
+    add_child(node, condition);
+    
+    // Parse the body { ... }
+    ASTNode* body = parse_block();
+    add_child(node, body);
+    
+    return node;
 }
 
 ASTNode* parse_var_decl(){
@@ -224,43 +369,111 @@ ASTNode* parse_var_decl(){
     ASTNode* value_expr = parse_expression();
     add_child(node, value_expr);
 
-    eat(TOKEN_NEWLINE, "Expected a newline to finish the statement.");
-
     return node;
+}
+
+ASTNode* parse_assignment() {
+    ASTNode* node = create_node(AST_ASSIGNMENT);
+    
+    strcpy(node->val_name, current_token.lexeme);
+    eat(TOKEN_IDENTIFIER, "Expected variable name for assignment");
+    
+    if (strcmp(current_token.lexeme, "=") != 0){
+        printf("Syntax Error: Expected '=' after variable name\n");
+        exit(1);
+    }
+    eat(TOKEN_SYMBOL, "Expected '='");
+    
+    ASTNode* expr = parse_expression();
+    add_child(node, expr);
+    
+    return node;
+}
+
+ASTNode* parse_print() {
+    ASTNode* node = create_node(AST_PRINT);
+    eat(TOKEN_KEYWORD, "Expected 'print'");
+    
+    if (strcmp(current_token.lexeme, "(") != 0) { printf("Syntax Error: Expected '('\n"); exit(1); }
+    eat(TOKEN_SYMBOL, "Expected '('");
+    
+    ASTNode* expr = parse_expression();
+    add_child(node, expr);
+    
+    if (strcmp(current_token.lexeme, ")") != 0) { printf("Syntax Error: Expected ')'\n"); exit(1); }
+    eat(TOKEN_SYMBOL, "Expected ')'");
+    
+    return node;
+}
+
+
+// --- CORE PARSER LOGIC ---
+
+ASTNode* parse_statement() {
+    if (current_token.type == TOKEN_KEYWORD) {
+        if (strcmp(current_token.lexeme, "int") == 0) {
+            return parse_var_decl();
+        } else if (strcmp(current_token.lexeme, "print") == 0) {
+            return parse_print();
+        } else if (strcmp(current_token.lexeme, "if") == 0) {
+            return parse_if();
+        } else if (strcmp(current_token.lexeme, "while") == 0) {
+            return parse_while();
+        }
+    } else if (current_token.type == TOKEN_IDENTIFIER) {
+        return parse_assignment();
+    }
+    
+    printf("Syntax Error: Unexpected token '%s' starting a statement.\n", current_token.lexeme);
+    exit(1);
 }
 
 ASTNode* parse_program(){
     ASTNode* root = create_node(AST_PROGRAM);
     current_token = get_next_token();
 
-    while (current_token.type == TOKEN_KEYWORD && strcmp(current_token.lexeme, "int") == 0){
-        ASTNode* decl = parse_var_decl();
-        add_child(root, decl);
+    skip_newlines();
 
-        while(current_token.type == TOKEN_NEWLINE){
-            eat(TOKEN_NEWLINE, "Skipping blank lines");
+    while (current_token.type != TOKEN_EOF) {
+        ASTNode* stmt = parse_statement();
+        if (stmt) {
+            add_child(root, stmt);
+        }
+        
+        // After every top-level statement, we expect a newline or EOF
+        if (current_token.type == TOKEN_NEWLINE) {
+            skip_newlines();
+        } else if (current_token.type != TOKEN_EOF) {
+            printf("Syntax Error: Expected newline after statement, found '%s'\n", current_token.lexeme);
+            exit(1);
         }
     }
 
     return root;
-
 }
 
-/**
- * Helper to print the tree of variables 
- */
+// --- HELPER FUNCTION TO PRINT THE TREE ---
 void print_ast(ASTNode* node, int depth) {
     if (!node) return;
     
-    // Indent based on depth
     for(int i=0; i<depth; i++) printf("  ");
     
     if (node->type == AST_PROGRAM) printf("PROGRAM\n");
-    else if (node->type == AST_VAR_DECL) printf("VAR_DECL: %s\n", node->val_name);
+    else if (node->type == AST_VAR_DECL) printf("VAR_DECL: %s =\n", node->val_name);
+    else if (node->type == AST_ASSIGNMENT) printf("ASSIGNMENT: %s =\n", node->val_name);
+    else if (node->type == AST_PRINT) printf("PRINT\n");
+    else if (node->type == AST_IF) printf("IF\n");
+    else if (node->type == AST_WHILE) printf("WHILE\n");
+    else if (node->type == AST_BLOCK) printf("BLOCK {}\n");
     else if (node->type == AST_NUMBER) printf("NUMBER: %d\n", node->int_value);
     else if (node->type == AST_VAR_REF) printf("VAR_REF: %s\n", node->val_name);
     else if (node->type == AST_ADD) printf("ADD (+)\n");
     else if (node->type == AST_SUB) printf("SUB (-)\n");
+    else if (node->type == AST_LT) printf("LESS THAN (<)\n");
+    else if (node->type == AST_GT) printf("GREATER THAN (>)\n");
+    else if (node->type == AST_EQ) printf("EQUAL TO (==)\n");
+    else if (node->type == AST_AND) printf("LOGICAL AND\n");
+    else if (node->type == AST_OR) printf("LOGICAL OR\n");
     
     for (int i = 0; i < node->child_count; i++) {
         print_ast(node->children[i], depth + 1);
@@ -284,8 +497,8 @@ int main (int argc, char* argv[]){
     rewind(file);
 
     source_code = malloc(length+1);
-    fread(source_code, 1, length, file);
-    source_code[length]  = '\0';
+    size_t bytes_read = fread(source_code, 1, length, file);
+    source_code[bytes_read] = '\0';
     fclose(file);
 
     printf("--- PARSING AST ---\n");
