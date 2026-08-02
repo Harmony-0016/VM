@@ -452,6 +452,131 @@ ASTNode* parse_program(){
     return root;
 }
 
+// -- CODE GENERATOR -- 
+
+typedef struct {
+    char name[64];
+    int address;
+} Symbol;
+
+Symbol symbol_table[100];
+int symbol_count = 0;
+int next_free_address = 0; //Keeps track of vm ram addresses
+int label_count = 0;  //Keeps labels unique 
+
+int get_var_address(const char* name){
+    for (int i = 0; i < symbol_count; i++){
+        if (strcmp(symbol_table[i].name, name) == 0) return symbol_table[i].address;
+    }
+    printf("Semantic Error: Variable '%s' used before declaration!\n", name);
+    exit(1);
+}
+
+/**
+ * Does the math and puts it into the proper target register
+ * Uses target_reg+1 for the right hand side to prevent overwriting itself
+ */
+void generate_expression(ASTNode* node, FILE* out, int target_reg){
+    if (node->type == AST_NUMBER){
+        fprintf(out, "LDI R%d %d\n", target_reg, node->int_value);
+    }
+    else if (node->type == AST_VAR_REF){
+        int addr = get_var_address(node->val_name);
+        fprintf(out, "LDI R28 %d\n", addr);
+        fprintf(out, "LOAD R%d R28\n", target_reg);
+    }
+    else if (node->type == AST_ADD || node->type == AST_SUB) {
+        generate_expression(node->children[0], out, target_reg);
+        generate_expression(node->children[1], out, target_reg+1);
+
+        if (node->type == AST_ADD) fprintf(out, "ADD R%d R%d R%d\n", target_reg, target_reg, target_reg + 1);
+        if (node->type == AST_SUB) fprintf(out, "SUB R%d R%d R%d\n", target_reg, target_reg, target_reg + 1);
+    }
+    else if (node->type == AST_AND || node->type == AST_OR){
+        generate_expression(node->children[0], out, target_reg);
+        generate_expression(node->children[1], out, target_reg+1);
+
+        if (node->type == AST_AND) fprintf(out, "AND R%d R%d R%d\n", target_reg, target_reg, target_reg + 1);
+        if (node->type == AST_OR)  fprintf(out, "OR R%d R%d R%d\n", target_reg, target_reg, target_reg + 1);
+    }
+    else if (node->type == AST_LT || node->type == AST_GT || node->type == AST_EQ) {
+        int l_id = label_count++;
+        generate_expression(node->children[0], out, target_reg);
+        generate_expression(node->children[1], out, target_reg + 1);
+        
+        fprintf(out, "CMP R%d R%d\n", target_reg, target_reg + 1);
+        fprintf(out, "LDI R%d 1\n", target_reg);
+        fprintf(out, "LDI R28 COND_TRUE_%d\n", l_id);
+        
+        if (node->type == AST_LT) fprintf(out, "JLT R28\n");
+        if (node->type == AST_GT) fprintf(out, "JGT R28\n");
+        if (node->type == AST_EQ) fprintf(out, "JEQ R28\n");
+        
+        fprintf(out, "LDI R%d 0\n", target_reg);
+        fprintf(out, "COND_TRUE_%d:\n", l_id);
+    }
+}
+
+void generate_statement(ASTNode* node, FILE* out) {
+    if (node->type == AST_VAR_DECL) {
+        generate_expression(node->children[0], out, 1);
+        
+        symbol_table[symbol_count].address = next_free_address;
+        strcpy(symbol_table[symbol_count].name, node->val_name);
+        symbol_count++;
+        
+        fprintf(out, "LDI R28 %d\n", next_free_address);
+        fprintf(out, "STORE R28 R1\n\n");
+        next_free_address += 4;
+    }
+    else if (node->type == AST_ASSIGNMENT) {
+        generate_expression(node->children[0], out, 1);
+        int addr = get_var_address(node->val_name);
+        fprintf(out, "LDI R28 %d\n", addr);
+        fprintf(out, "STORE R28 R1\n\n");
+    }
+    else if (node->type == AST_PRINT) {
+        generate_expression(node->children[0], out, 1);
+        fprintf(out, "LDI R28 65535\n");
+        fprintf(out, "STORE R28 R1\n\n");
+        fprintf(out, "LDI R1 10\n");
+        fprintf(out, "STORE R28 R1\n\n");
+    }
+    else if (node->type == AST_BLOCK) {
+        for(int i=0; i<node->child_count; i++) generate_statement(node->children[i], out);
+    }
+    else if (node->type == AST_IF) {
+        int l_id = label_count++;
+        generate_expression(node->children[0], out, 1); // R1 will hold 1 (true) or 0 (false)
+        
+        fprintf(out, "LDI R2 0\n");
+        fprintf(out, "CMP R1 R2\n");
+        fprintf(out, "LDI R28 IF_END_%d\n", l_id);
+        fprintf(out, "JEQ R28\n\n"); // If R1 is 0 (False), jump to the end!
+        
+        generate_statement(node->children[1], out); // The Body
+        
+        fprintf(out, "IF_END_%d:\n\n", l_id);
+    }
+    else if (node->type == AST_WHILE) {
+        int l_id = label_count++;
+        fprintf(out, "WHILE_START_%d:\n", l_id);
+        
+        generate_expression(node->children[0], out, 1);
+        fprintf(out, "LDI R2 0\n");
+        fprintf(out, "CMP R1 R2\n");
+        fprintf(out, "LDI R28 WHILE_END_%d\n", l_id);
+        fprintf(out, "JEQ R28\n\n"); // If condition is false, break the loop
+        
+        generate_statement(node->children[1], out); // The Body
+        
+        fprintf(out, "LDI R28 WHILE_START_%d\n", l_id);
+        fprintf(out, "JMP R28\n\n"); // Teleport back to the top
+        
+        fprintf(out, "WHILE_END_%d:\n\n", l_id);
+    }
+}
+
 // --- HELPER FUNCTION TO PRINT THE TREE ---
 void print_ast(ASTNode* node, int depth) {
     if (!node) return;
@@ -503,8 +628,19 @@ int main (int argc, char* argv[]){
 
     printf("--- PARSING AST ---\n");
     ASTNode* program = parse_program();
-
     print_ast(program, 0);
+
+    const char* out_name = (argc >= 3) ? argv[2] : "output.asm";
+    
+    FILE* out = fopen(out_name, "w");
+    fprintf(out, "; === AUTO-GENERATED ASSEMBLY FROM COMPILER ===\n\n");
+    for (int i = 0; i < program->child_count; i++) {
+        generate_statement(program->children[i], out);
+    }
+    fprintf(out, "HALT\n");
+    fclose(out);
+    
+    printf("\nSuccess! Generated assembly saved to %s\n", out_name);
 
     free(source_code);
     return 0;
