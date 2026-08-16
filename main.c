@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <time.h>
 
 #define MAX_MEMORY_SIZE 65536 //64 kilobytes of RAM
 #define NUM_REGISTERS 32 //total registers will be 32
@@ -36,6 +38,7 @@ typedef enum {
     OP_DIV = 0x17,
     OP_MOD = 0x18,
     OP_DUMP = 0x19,
+    OP_SYSCALL = 0x1A, //System calls for OS 
 } Opcode;
 
 /**
@@ -387,6 +390,22 @@ void run_vm(VirtualMachine* vm){
             case OP_DUMP: 
                 dump_state(vm);
                 break;
+
+            case OP_SYSCALL:
+                uint32_t command_int = vm->registers[1];
+
+                if (command_int == 1){
+                    uint32_t value_to_print = vm->registers[2];
+                    printf("%d\n", value_to_print);
+                }
+                else if (command_int == 2) {
+                    srand(time(NULL));
+                    vm->registers[2] = rand() % 101;
+                } else {
+                    printf("OS ERROR: Unknown SYSCALL command %d\n", command_int);
+                }
+            break;
+
 
             default:
                 printf("ERROR: No operator for command\n");

@@ -33,6 +33,7 @@ typedef enum {
     OP_DIV = 0x17,
     OP_MOD = 0x18,
     OP_DUMP = 0x19,
+    OP_SYSCALL = 0x1A
 } Opcode;
 
 typedef struct {
@@ -285,6 +286,9 @@ int main(int argc, char* argv[]){
         }
         else if (strcmp(token, "DUMP") == 0){
             instruction = OP_DUMP << 24; 
+        } 
+        else if (strcmp(token, "SYSCALL") == 0){
+            instruction = (OP_SYSCALL << 24);
         }
     else {
         printf("Error on line %d: Unknown instruction '%s'\n", line_number, token);
